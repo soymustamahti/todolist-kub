@@ -1,0 +1,47 @@
+---
+- name: Setup Kubernetes Cluster from Scratch
+  hosts: all
+  become: yes
+  gather_facts: yes
+  vars:
+    kubernetes_version: "1.28"
+    docker_version: "24.0.7"
+    
+  tasks:
+    - name: Set hostname
+      hostname:
+        name: "{{ inventory_hostname }}"
+
+    - name: Update /etc/hosts
+      lineinfile:
+        path: /etc/hosts
+        line: "{{ ansible_default_ipv4.address }} {{ inventory_hostname }}"
+        state: present
+
+- name: Common Setup for All Nodes
+  hosts: k8s_cluster
+  become: yes
+  roles:
+    - common
+    - docker
+    - kubernetes
+
+- name: Initialize Master Node
+  hosts: master
+  become: yes
+  roles:
+    - master
+
+- name: Join Worker Nodes
+  hosts: workers
+  become: yes
+  roles:
+    - workers
+
+- name: Deploy Infrastructure Components
+  hosts: master
+  become: yes
+  roles:
+    - traefik
+    - prometheus
+    - argocd

@@ -1,0 +1,22 @@
+---
+# Join worker nodes to the cluster
+- name: Check if node is already joined
+  stat:
+    path: /etc/kubernetes/kubelet.conf
+  register: kubelet_conf
+
+- name: Copy join command from local machine
+  copy:
+    src: /tmp/kubeadm_join_command.sh
+    dest: /tmp/kubeadm_join_command.sh
+    mode: 0755
+  when: not kubelet_conf.stat.exists
+
+- name: Join node to cluster
+  shell: /tmp/kubeadm_join_command.sh
+  when: not kubelet_conf.stat.exists
+
+- name: Remove join command file
+  file:
+    path: /tmp/kubeadm_join_command.sh
+    state: absent
