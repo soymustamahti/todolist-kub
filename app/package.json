@@ -16,7 +16,11 @@
   "devDependencies": {
     "nodemon": "^3.0.1"
   },
-  "keywords": ["todo", "express", "postgresql"],
+  "keywords": [
+    "todo",
+    "express",
+    "postgresql"
+  ],
   "author": "Mustapha",
   "license": "MIT"
 }

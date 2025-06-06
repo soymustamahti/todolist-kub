@@ -5,6 +5,7 @@ This project sets up a complete Kubernetes infrastructure on 3 DigitalOcean VMs 
 ## 🚀 Quick Start
 
 ### Prerequisites
+
 - Ansible installed on your local machine
 - SSH access to the 3 VMs
 - Docker Hub account (for image registry)
@@ -12,12 +13,14 @@ This project sets up a complete Kubernetes infrastructure on 3 DigitalOcean VMs 
 ### Infrastructure Setup
 
 1. **Clone the repository:**
+
    ```bash
    git clone https://github.com/soymustamahti/todolist-kub.git
    cd todolist-kub
    ```
 
 2. **Update inventory.ini with your VM IPs (if different):**
+
    ```ini
    [master]
    k8s-master ansible_host=167.71.35.144
@@ -33,6 +36,7 @@ This project sets up a complete Kubernetes infrastructure on 3 DigitalOcean VMs 
    ```
 
 This single command will:
+
 - Install Docker on all nodes
 - Install Kubernetes components (kubeadm, kubelet, kubectl)
 - Initialize the master node
@@ -53,6 +57,7 @@ kubectl apply -f k8s-manifests/argo-app.yaml
 ## 🏗️ Architecture
 
 ### Infrastructure Components
+
 - **3 VMs**: 1 Master + 2 Workers
 - **Container Runtime**: Docker
 - **Orchestration**: Kubernetes 1.28
@@ -61,6 +66,7 @@ kubectl apply -f k8s-manifests/argo-app.yaml
 - **GitOps**: ArgoCD
 
 ### Application Stack
+
 - **Frontend**: HTML + CSS + JavaScript
 - **Backend**: Express.js (Node.js)
 - **Database**: PostgreSQL
@@ -76,6 +82,7 @@ After deployment, access the services:
 - **Grafana**: http://167.71.35.144:30091
 
 ### Get ArgoCD Admin Password
+
 ```bash
 kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
 ```
@@ -83,13 +90,16 @@ kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.pas
 ## 🔄 CI/CD Pipeline
 
 The GitHub Actions workflow automatically:
+
 1. Builds Docker image on push to `main`
 2. Pushes to Docker Hub
 3. Updates Kubernetes manifests with new image tag
 4. ArgoCD automatically syncs changes
 
 ### Required Secrets
+
 Add these to your GitHub repository secrets:
+
 - `DOCKER_USERNAME`: Your Docker Hub username
 - `DOCKER_PASSWORD`: Your Docker Hub password
 
@@ -141,23 +151,27 @@ npm run dev
 ## 🔧 Troubleshooting
 
 ### Check Cluster Status
+
 ```bash
 kubectl get nodes
 kubectl get pods -A
 ```
 
 ### Check ArgoCD Apps
+
 ```bash
 kubectl get applications -n argocd
 ```
 
 ### View Pod Logs
+
 ```bash
 kubectl logs -n todoapp deployment/todoapp
 kubectl logs -n todoapp deployment/postgres
 ```
 
 ### Reset Cluster (if needed)
+
 ```bash
 kubeadm reset
 # Then re-run the Ansible playbook

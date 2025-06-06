@@ -7,11 +7,13 @@ Your project is **100% ready** for deployment! Here's what has been created:
 ### 🏗️ Infrastructure Components
 
 1. **Ansible Automation** (One-command deployment)
+
    - Complete cluster setup from scratch
    - Automated installation of all components
    - Zero manual intervention required
 
 2. **Kubernetes Cluster** (3 VMs)
+
    - 1 Master node: `167.71.35.144`
    - 2 Worker nodes: `164.92.168.187`, `167.172.99.233`
    - Kubernetes 1.28 with Flannel CNI
@@ -25,6 +27,7 @@ Your project is **100% ready** for deployment! Here's what has been created:
 ### 📱 ToDo List Application
 
 1. **Modern Web App**
+
    - Express.js backend with REST API
    - Beautiful responsive HTML frontend
    - PostgreSQL database with persistence
@@ -47,17 +50,20 @@ Your project is **100% ready** for deployment! Here's what has been created:
 ## 🚀 How to Deploy
 
 ### Option 1: Quick Deploy (Recommended)
+
 ```bash
 cd /home/musta/Desktop/workspace/2024/epitech/CLO/kub
 ./deploy.sh
 ```
 
 ### Option 2: Manual Deploy
+
 ```bash
 ansible-playbook -i inventory.ini setup.yml
 ```
 
 ### ⏱️ Deployment Time
+
 - **Total time**: ~10-15 minutes
 - **Automated**: 100% hands-off after running the command
 
@@ -65,16 +71,17 @@ ansible-playbook -i inventory.ini setup.yml
 
 After deployment:
 
-| Service | URL | Purpose |
-|---------|-----|---------|
-| **ToDo App** | http://167.71.35.144:30080 | Main application |
-| **ArgoCD** | http://167.71.35.144:30092 | GitOps dashboard |
-| **Prometheus** | http://167.71.35.144:30090 | Metrics |
-| **Grafana** | http://167.71.35.144:30091 | Monitoring dashboards |
+| Service        | URL                        | Purpose               |
+| -------------- | -------------------------- | --------------------- |
+| **ToDo App**   | http://167.71.35.144:30080 | Main application      |
+| **ArgoCD**     | http://167.71.35.144:30092 | GitOps dashboard      |
+| **Prometheus** | http://167.71.35.144:30090 | Metrics               |
+| **Grafana**    | http://167.71.35.144:30091 | Monitoring dashboards |
 
 ### 🔑 Login Credentials
 
-- **ArgoCD**: 
+- **ArgoCD**:
+
   - Username: `admin`
   - Password: Get with `kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d`
 
@@ -85,11 +92,13 @@ After deployment:
 ## 🎯 Testing & Validation
 
 1. **Run validation script**:
+
    ```bash
    ./validate.sh
    ```
 
 2. **Check cluster status**:
+
    ```bash
    ssh root@167.71.35.144 "kubectl get all -A"
    ```
@@ -109,6 +118,7 @@ After deployment:
 ## 📊 What's Included
 
 ### ✅ Complete Ansible Automation
+
 - [x] VM preparation (swap, firewall, sysctl)
 - [x] Docker installation & configuration
 - [x] Kubernetes cluster initialization
@@ -120,6 +130,7 @@ After deployment:
 - [x] Application deployment
 
 ### ✅ Production-Ready Application
+
 - [x] RESTful API backend
 - [x] Modern responsive frontend
 - [x] PostgreSQL database
@@ -130,6 +141,7 @@ After deployment:
 - [x] Persistent storage
 
 ### ✅ CI/CD Pipeline
+
 - [x] GitHub Actions workflow
 - [x] Docker image builds
 - [x] Registry integration
@@ -165,6 +177,7 @@ Your complete Kubernetes infrastructure with ToDo application is ready to deploy
 ```
 
 And in 10-15 minutes, you'll have a fully functional:
+
 - ✅ Kubernetes cluster
 - ✅ ToDo application
 - ✅ Monitoring stack

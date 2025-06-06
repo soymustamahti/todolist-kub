@@ -22,17 +22,6 @@
     swapoff -a
     sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
 
-- name: Configure sysctl for Kubernetes
-  sysctl:
-    name: "{{ item }}"
-    value: "1"
-    state: present
-    reload: yes
-  loop:
-    - net.bridge.bridge-nf-call-ip6tables
-    - net.bridge.bridge-nf-call-iptables
-    - net.ipv4.ip_forward
-
 - name: Load br_netfilter module
   modprobe:
     name: br_netfilter
@@ -44,18 +33,29 @@
     line: br_netfilter
     create: yes
 
+- name: Configure sysctl for Kubernetes
+  sysctl:
+    name: "{{ item }}"
+    value: "1"
+    state: present
+    reload: yes
+  loop:
+    - net.bridge.bridge-nf-call-ip6tables
+    - net.bridge.bridge-nf-call-iptables
+    - net.ipv4.ip_forward
+
 - name: Configure UFW to allow Kubernetes ports
   ufw:
     rule: allow
     port: "{{ item }}"
     proto: tcp
   loop:
-    - "6443"    # Kubernetes API
-    - "2379:2380"  # etcd
-    - "10250"   # kubelet
-    - "10251"   # kube-scheduler
-    - "10252"   # kube-controller-manager
-    - "30000:32767"  # NodePort services
+    - "6443" # Kubernetes API
+    - "2379:2380" # etcd
+    - "10250" # kubelet
+    - "10251" # kube-scheduler
+    - "10252" # kube-controller-manager
+    - "30000:32767" # NodePort services
 
 - name: Enable UFW
   ufw:
