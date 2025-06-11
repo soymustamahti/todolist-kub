@@ -1,0 +1,93 @@
+name: Deploy Todo App to Kubernetes
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  REGISTRY_URL: soymustael
+  FRONTEND_IMAGE: todo-frontend
+  BACKEND_IMAGE: todo-backend
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    - name: Build and push frontend image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./app
+        file: ./app/apps/frontend/Dockerfile
+        push: true
+        tags: |
+          ${{ env.REGISTRY_URL }}/${{ env.FRONTEND_IMAGE }}:latest
+          ${{ env.REGISTRY_URL }}/${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Build and push backend image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./app
+        file: ./app/apps/backend/Dockerfile
+        push: true
+        tags: |
+          ${{ env.REGISTRY_URL }}/${{ env.BACKEND_IMAGE }}:latest
+          ${{ env.REGISTRY_URL }}/${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'latest'
+
+    - name: Configure kubectl
+      run: |
+        mkdir -p ~/.kube
+        echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > ~/.kube/config
+        chmod 600 ~/.kube/config
+
+    - name: Deploy to Kubernetes
+      run: |
+        # Update image tags in deployment files
+        sed -i "s|soymustael/todo-frontend:latest|soymustael/todo-frontend:${{ github.sha }}|g" k8s/frontend-deployment.yaml
+        sed -i "s|soymustael/todo-backend:latest|soymustael/todo-backend:${{ github.sha }}|g" k8s/backend-deployment.yaml
+        
+        # Apply Kubernetes manifests
+        kubectl apply -f k8s/namespace.yaml
+        kubectl apply -f k8s/secrets.yaml
+        kubectl apply -f k8s/postgres-pv.yaml
+        kubectl apply -f k8s/postgres-deployment.yaml
+        kubectl apply -f k8s/backend-deployment.yaml
+        kubectl apply -f k8s/frontend-deployment.yaml
+        kubectl apply -f k8s/ingress.yaml
+        
+        # Wait for deployments to be ready
+        kubectl rollout status deployment/backend-deployment -n todo-app --timeout=300s
+        kubectl rollout status deployment/frontend-deployment -n todo-app --timeout=300s
+        
+        # Run database migrations
+        kubectl wait --for=condition=ready pod -l app=backend -n todo-app --timeout=300s
+        kubectl exec -n todo-app deployment/backend-deployment -- yarn migrate:deploy
+
+    - name: Verify deployment
+      run: |
+        kubectl get pods -n todo-app
+        kubectl get services -n todo-app
+        kubectl get ingress -n todo-app
