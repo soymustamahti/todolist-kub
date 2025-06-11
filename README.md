@@ -1,202 +1,236 @@
-# ToDo List Kubernetes Application
+# Todo List Monorepo
 
-This project sets up a complete Kubernetes infrastructure on 3 DigitalOcean VMs with a ToDo List application.
+A full-stack todo list application built with React, Express, and PostgreSQL using Yarn workspaces.
 
-## 🚀 Quick Start
+## Features
 
-### Prerequisites
+- 🔐 **Authentication**: JWT-based user authentication
+- ✅ **CRUD Operations**: Create, read, update, and delete todos
+- 🎯 **Priority Levels**: High, Medium, Low priority todos
+- 📅 **Due Dates**: Set and track due dates for todos
+- 🔍 **Search & Filter**: Search and filter todos by status, priority, and more
+- 📱 **Responsive Design**: Modern UI with Tailwind CSS
+- 🗄️ **Database**: PostgreSQL with Prisma ORM
+- 🔄 **Migrations**: Database schema migrations
+- 🌱 **Seeding**: Sample data for development
 
-- Ansible installed on your local machine
-- SSH access to the 3 VMs
-- Docker Hub account (for image registry)
+## Tech Stack
 
-### Infrastructure Setup
+### Frontend
 
-1. **Clone the repository:**
+- React 18
+- TypeScript
+- Vite
+- Tailwind CSS
+- React Query
+- React Hook Form
+- React Router
 
-   ```bash
-   git clone https://github.com/soymustamahti/todolist-kub.git
-   cd todolist-kub
-   ```
+### Backend
 
-2. **Update inventory.ini with your VM IPs (if different):**
+- Node.js
+- Express
+- TypeScript
+- Prisma ORM
+- PostgreSQL
+- JWT Authentication
+- Zod validation
 
-   ```ini
-   [master]
-   k8s-master ansible_host=167.71.35.144
+### Development
 
-   [workers]
-   k8s-worker1 ansible_host=164.92.168.187
-   k8s-worker2 ansible_host=167.172.99.233
-   ```
+- Yarn Workspaces
+- ESLint
+- Prettier
 
-3. **Run the Ansible playbook:**
-   ```bash
-   ansible-playbook -i inventory.ini setup.yml
-   ```
+## Prerequisites
 
-This single command will:
+- Node.js (v18 or higher)
+- Yarn (v1.22 or higher)
+- PostgreSQL
 
-- Install Docker on all nodes
-- Install Kubernetes components (kubeadm, kubelet, kubectl)
-- Initialize the master node
-- Join worker nodes to the cluster
-- Install Traefik (Ingress Controller)
-- Install Prometheus (Monitoring)
-- Install ArgoCD (GitOps)
+## Setup Instructions
 
-### Application Deployment
-
-After the infrastructure is ready, deploy the ToDo app:
-
-```bash
-# Apply the ArgoCD application (from master node)
-kubectl apply -f k8s-manifests/argo-app.yaml
-```
-
-## 🏗️ Architecture
-
-### Infrastructure Components
-
-- **3 VMs**: 1 Master + 2 Workers
-- **Container Runtime**: Docker
-- **Orchestration**: Kubernetes 1.28
-- **Ingress**: Traefik
-- **Monitoring**: Prometheus + Grafana
-- **GitOps**: ArgoCD
-
-### Application Stack
-
-- **Frontend**: HTML + CSS + JavaScript
-- **Backend**: Express.js (Node.js)
-- **Database**: PostgreSQL
-- **Container Registry**: Docker Hub
-
-## 🌐 Access URLs
-
-After deployment, access the services:
-
-- **ToDo App**: http://167.71.35.144:30080 or http://todoapp.167.71.35.144.nip.io:30080
-- **ArgoCD**: http://167.71.35.144:30092 (admin/[get password from cluster])
-- **Prometheus**: http://167.71.35.144:30090
-- **Grafana**: http://167.71.35.144:30091
-
-### Get ArgoCD Admin Password
+### 1. Clone and Install Dependencies
 
 ```bash
-kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+# Clone the repository
+git clone <repository-url>
+cd todo-monorepo
+
+# Install dependencies for all workspaces
+yarn install
 ```
 
-## 🔄 CI/CD Pipeline
-
-The GitHub Actions workflow automatically:
-
-1. Builds Docker image on push to `main`
-2. Pushes to Docker Hub
-3. Updates Kubernetes manifests with new image tag
-4. ArgoCD automatically syncs changes
-
-### Required Secrets
-
-Add these to your GitHub repository secrets:
-
-- `DOCKER_USERNAME`: Your Docker Hub username
-- `DOCKER_PASSWORD`: Your Docker Hub password
-
-## 📁 Project Structure
-
-```
-├── inventory.ini           # Ansible inventory
-├── setup.yml              # Main Ansible playbook
-├── roles/                  # Ansible roles
-│   ├── common/            # Basic system setup
-│   ├── docker/            # Docker installation
-│   ├── kubernetes/        # K8s components
-│   ├── master/            # Master node setup
-│   ├── workers/           # Worker nodes join
-│   ├── traefik/           # Ingress controller
-│   ├── prometheus/        # Monitoring
-│   └── argocd/            # GitOps
-├── app/                   # ToDo application
-│   ├── src/server.js      # Express.js backend
-│   ├── public/index.html  # Frontend
-│   ├── Dockerfile         # Container image
-│   └── package.json       # Dependencies
-├── k8s-manifests/         # Kubernetes YAMLs
-│   ├── app.yaml           # App deployment
-│   ├── db.yaml            # PostgreSQL
-│   ├── ingress.yaml       # Traefik ingress
-│   └── argo-app.yaml      # ArgoCD application
-└── .github/workflows/     # CI/CD pipeline
-    └── deploy.yml         # GitHub Actions
-```
-
-## 🛠️ Local Development
-
-For local development:
+### 2. Database Setup
 
 ```bash
-cd app
-npm install
-docker-compose up -d
-npm run dev
+# Start PostgreSQL service (Ubuntu/Debian)
+sudo service postgresql start
+
+# Create database
+sudo -u postgres createdb todoapp
+
+# Create user (optional)
+sudo -u postgres createuser --interactive
 ```
 
-## 📊 Monitoring
-
-- **Prometheus**: Metrics collection
-- **Grafana**: Visualization dashboards
-- **Default credentials**: admin/prom-operator
-
-## 🔧 Troubleshooting
-
-### Check Cluster Status
+### 3. Environment Configuration
 
 ```bash
-kubectl get nodes
-kubectl get pods -A
+# Copy environment file
+cp apps/backend/.env.example apps/backend/.env
+
+# Edit the environment variables
+nano apps/backend/.env
 ```
 
-### Check ArgoCD Apps
+Update the `DATABASE_URL` in `.env`:
+
+```
+DATABASE_URL="postgresql://username:password@localhost:5432/todoapp?schema=public"
+```
+
+### 4. Database Migration and Seeding
 
 ```bash
-kubectl get applications -n argocd
+# Generate Prisma client
+cd apps/backend
+yarn db:generate
+
+# Run migrations
+yarn migrate
+
+# Seed the database with sample data
+yarn seed
 ```
 
-### View Pod Logs
+### 5. Start Development Servers
 
 ```bash
-kubectl logs -n todoapp deployment/todoapp
-kubectl logs -n todoapp deployment/postgres
+# From root directory - starts both frontend and backend
+yarn dev
+
+# Or start individually:
+# Backend (from root)
+yarn workspace backend dev
+
+# Frontend (from root)
+yarn workspace frontend dev
 ```
 
-### Reset Cluster (if needed)
+The application will be available at:
 
-```bash
-kubeadm reset
-# Then re-run the Ansible playbook
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:3001
+
+## Available Scripts
+
+### Root Level
+
+- `yarn dev` - Start both frontend and backend in development mode
+- `yarn build` - Build all workspaces
+- `yarn start` - Start production backend
+- `yarn migrate` - Run database migrations
+- `yarn seed` - Seed database with sample data
+
+### Backend (`apps/backend`)
+
+- `yarn dev` - Start development server with hot reload
+- `yarn build` - Build TypeScript to JavaScript
+- `yarn start` - Start production server
+- `yarn migrate` - Run Prisma migrations
+- `yarn db:generate` - Generate Prisma client
+- `yarn db:studio` - Open Prisma Studio
+- `yarn seed` - Seed database
+
+### Frontend (`apps/frontend`)
+
+- `yarn dev` - Start Vite development server
+- `yarn build` - Build for production
+- `yarn preview` - Preview production build
+
+## API Endpoints
+
+### Authentication
+
+- `POST /api/auth/register` - Register new user
+- `POST /api/auth/login` - Login user
+- `GET /api/auth/me` - Get current user
+
+### Todos
+
+- `GET /api/todos` - Get all todos (with query filters)
+- `POST /api/todos` - Create new todo
+- `GET /api/todos/:id` - Get specific todo
+- `PUT /api/todos/:id` - Update todo
+- `DELETE /api/todos/:id` - Delete todo
+- `PATCH /api/todos/:id/toggle` - Toggle todo completion
+
+## Default Credentials
+
+After running the seed script, you can login with:
+
+- **Email**: demo@example.com
+- **Password**: password123
+
+## Database Schema
+
+### Users Table
+
+- `id` - Unique identifier
+- `email` - User email (unique)
+- `name` - User full name (optional)
+- `password` - Hashed password
+- `createdAt` - Creation timestamp
+- `updatedAt` - Last update timestamp
+
+### Todos Table
+
+- `id` - Unique identifier
+- `title` - Todo title
+- `description` - Todo description (optional)
+- `completed` - Completion status
+- `priority` - Priority level (LOW, MEDIUM, HIGH)
+- `dueDate` - Due date (optional)
+- `userId` - Foreign key to user
+- `createdAt` - Creation timestamp
+- `updatedAt` - Last update timestamp
+
+## Project Structure
+
+```
+├── package.json                 # Root package.json with workspaces
+├── apps/
+│   ├── frontend/               # React frontend application
+│   │   ├── src/
+│   │   │   ├── components/     # Reusable UI components
+│   │   │   ├── pages/          # Page components
+│   │   │   ├── hooks/          # Custom React hooks
+│   │   │   ├── services/       # API service functions
+│   │   │   ├── context/        # React context providers
+│   │   │   ├── types/          # TypeScript type definitions
+│   │   │   └── utils/          # Utility functions
+│   │   └── package.json
+│   └── backend/                # Express backend application
+│       ├── src/
+│       │   ├── routes/         # API route handlers
+│       │   ├── middleware/     # Express middleware
+│       │   ├── types/          # TypeScript schemas
+│       │   └── utils/          # Utility functions
+│       ├── prisma/
+│       │   └── schema.prisma   # Database schema
+│       └── package.json
+└── packages/                   # Shared packages (if any)
 ```
 
-## 🎯 Features
-
-- ✅ **Full Infrastructure Automation**: One command setup
-- ✅ **High Availability**: Multi-node cluster
-- ✅ **Auto-scaling**: Kubernetes HPA ready
-- ✅ **Monitoring**: Prometheus + Grafana
-- ✅ **GitOps**: ArgoCD automated deployments
-- ✅ **Security**: Non-root containers, secrets management
-- ✅ **Persistent Storage**: PostgreSQL data persistence
-- ✅ **Load Balancing**: Traefik ingress
-- ✅ **CI/CD**: GitHub Actions pipeline
-
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## 📄 License
+## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License.

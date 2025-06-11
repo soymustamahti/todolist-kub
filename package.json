@@ -1,0 +1,29 @@
+{
+  "name": "todo-monorepo",
+  "version": "1.0.0",
+  "description": "A todo list application with React frontend and Express backend",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "yarn workspace frontend dev & yarn workspace backend dev",
+    "build": "yarn workspaces run build",
+    "start": "yarn workspace backend start",
+    "install:all": "yarn install",
+    "clean": "yarn workspaces run clean",
+    "migrate": "yarn workspace backend migrate",
+    "seed": "yarn workspace backend seed"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "prettier": "^3.0.0",
+    "eslint": "^8.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "yarn": ">=1.22.0"
+  }
+}
