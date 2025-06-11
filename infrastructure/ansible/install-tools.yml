@@ -1,0 +1,185 @@
+---
+- name: Install ArgoCD using Helm
+  hosts: masters
+  become: yes
+  vars:
+    argocd_namespace: argocd
+    helm_version: "3.12.0"
+
+  tasks:
+    - name: Install required Python packages via apt
+      apt:
+        name:
+          - python3-pip
+          - python3-kubernetes
+          - python3-yaml
+          - python3-jsonpatch
+        state: present
+        update_cache: yes
+
+    - name: Install Helm
+      block:
+        - name: Download Helm installer script
+          get_url:
+            url: https://get.helm.sh/helm-v{{ helm_version }}-linux-amd64.tar.gz
+            dest: /tmp/helm.tar.gz
+
+        - name: Extract Helm
+          unarchive:
+            src: /tmp/helm.tar.gz
+            dest: /tmp
+            remote_src: yes
+
+        - name: Move Helm binary
+          shell: |
+            cp /tmp/linux-amd64/helm /usr/local/bin/helm
+            chmod +x /usr/local/bin/helm
+
+    - name: Create ArgoCD namespace
+      kubernetes.core.k8s:
+        name: "{{ argocd_namespace }}"
+        api_version: v1
+        kind: Namespace
+        state: present
+        kubeconfig: /root/.kube/config
+
+    - name: Add ArgoCD Helm repository
+      kubernetes.core.helm_repository:
+        name: argo
+        repo_url: https://argoproj.github.io/argo-helm
+
+    - name: Install ArgoCD with Helm
+      kubernetes.core.helm:
+        name: argocd
+        chart_ref: argo/argo-cd
+        release_namespace: "{{ argocd_namespace }}"
+        create_namespace: true
+        kubeconfig: /root/.kube/config
+        values:
+          server:
+            service:
+              type: NodePort
+              nodePortHttp: 30080
+              nodePortHttps: 30443
+          configs:
+            params:
+              server.insecure: true
+
+    - name: Wait for ArgoCD to be ready
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        name: argocd-server
+        namespace: "{{ argocd_namespace }}"
+        kubeconfig: /root/.kube/config
+        wait: true
+        wait_condition:
+          type: Available
+          status: "True"
+        wait_timeout: 600
+
+    - name: Get ArgoCD initial admin password
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Secret
+        name: argocd-initial-admin-secret
+        namespace: "{{ argocd_namespace }}"
+        kubeconfig: /root/.kube/config
+      register: argocd_secret
+
+    - name: Decode ArgoCD password
+      set_fact:
+        argocd_password: "{{ argocd_secret.resources[0].data.password | b64decode }}"
+      when: argocd_secret.resources
+
+    - name: Display ArgoCD access information
+      debug:
+        msg: |
+          ArgoCD is now accessible at:
+          - Internal: http://argocd-server.argocd.svc.cluster.local
+          - External: http://{{ ansible_default_ipv4.address }}:30080
+          - HTTPS: https://{{ ansible_default_ipv4.address }}:30443
+
+          Login credentials:
+          - Username: admin
+          - Password: {{ argocd_password | default('Check the argocd-initial-admin-secret') }}
+
+- name: Install Prometheus Stack using Helm
+  hosts: masters
+  become: yes
+  vars:
+    monitoring_namespace: monitoring
+
+  tasks:
+    - name: Add Prometheus Community Helm repository
+      kubernetes.core.helm_repository:
+        name: prometheus-community
+        repo_url: https://prometheus-community.github.io/helm-charts
+
+    - name: Install Prometheus Stack with Helm
+      kubernetes.core.helm:
+        name: prometheus-stack
+        chart_ref: prometheus-community/kube-prometheus-stack
+        release_namespace: "{{ monitoring_namespace }}"
+        create_namespace: true
+        kubeconfig: /root/.kube/config
+        values:
+          prometheus:
+            service:
+              type: NodePort
+              nodePort: 30090
+          grafana:
+            service:
+              type: NodePort
+              nodePort: 30091
+            adminPassword: admin123
+          alertmanager:
+            service:
+              type: NodePort
+              nodePort: 30092
+
+    - name: Display Prometheus Stack access information
+      debug:
+        msg: |
+          Monitoring tools are accessible at:
+          - Prometheus: http://{{ ansible_default_ipv4.address }}:30090
+          - Grafana: http://{{ ansible_default_ipv4.address }}:30091 (admin/admin123)
+          - AlertManager: http://{{ ansible_default_ipv4.address }}:30092
+
+- name: Install Traefik Ingress Controller
+  hosts: masters
+  become: yes
+  vars:
+    traefik_namespace: traefik-system
+
+  tasks:
+    - name: Add Traefik Helm repository
+      kubernetes.core.helm_repository:
+        name: traefik
+        repo_url: https://helm.traefik.io/traefik
+
+    - name: Install Traefik with Helm
+      kubernetes.core.helm:
+        name: traefik
+        chart_ref: traefik/traefik
+        release_namespace: "{{ traefik_namespace }}"
+        create_namespace: true
+        kubeconfig: /root/.kube/config
+        values:
+          service:
+            type: NodePort
+          ports:
+            web:
+              nodePort: 30082
+            websecure:
+              nodePort: 30444
+          ingressRoute:
+            dashboard:
+              enabled: true
+
+    - name: Display Traefik access information
+      debug:
+        msg: |
+          Traefik Dashboard is accessible at:
+          - HTTP: http://{{ ansible_default_ipv4.address }}:30082/dashboard/
+          - HTTPS: https://{{ ansible_default_ipv4.address }}:30444/dashboard/
