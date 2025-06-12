@@ -1,0 +1,151 @@
+# Default values for todo-app.
+# This is a YAML-formatted file.
+
+# Global configuration
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+
+# Application configuration
+app:
+  name: todo-app
+  version: "1.0.0"
+
+# Frontend configuration
+frontend:
+  enabled: true
+  replicaCount: 2
+
+  image:
+    repository: soymustael/todo-frontend
+    tag: "latest"
+    pullPolicy: Always
+
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 80
+
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+  env:
+    VITE_API_URL: "http://todo-app-backend:3000"
+    VITE_NODE_ENV: "production"
+
+# Backend configuration
+backend:
+  enabled: true
+  replicaCount: 2
+
+  image:
+    repository: soymustael/todo-backend
+    tag: "latest"
+    pullPolicy: Always
+
+  service:
+    type: ClusterIP
+    port: 3000
+    targetPort: 3000
+
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+
+  env:
+    NODE_ENV: "production"
+    PORT: "3000"
+    JWT_SECRET: "your-super-secret-jwt-key-change-this"
+    CORS_ORIGIN: "*"
+
+# PostgreSQL configuration (using Bitnami chart)
+postgresql:
+  enabled: true
+  auth:
+    postgresPassword: "todopass"
+    username: "todouser"
+    password: "todopass"
+    database: "todoapp"
+
+  primary:
+    persistence:
+      enabled: true
+      size: 8Gi
+
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 250m
+        memory: 256Mi
+
+# Ingress configuration
+ingress:
+  enabled: true
+  className: "traefik"
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+  hosts:
+    - host: todo-app.local
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: frontend
+              port:
+                number: 80
+        - path: /api
+          pathType: Prefix
+          backend:
+            service:
+              name: backend
+              port:
+                number: 3000
+  tls: []
+
+# Service Monitor for Prometheus
+serviceMonitor:
+  enabled: true
+  namespace: monitoring
+  labels:
+    app: todo-app
+
+# Horizontal Pod Autoscaler
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+# Node selector
+nodeSelector: {}
+
+# Tolerations
+tolerations: []
+
+# Affinity
+affinity: {}
+
+# Security context
+podSecurityContext:
+  fsGroup: 2000
+
+securityContext:
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: false
+  runAsNonRoot: true
+  runAsUser: 1000

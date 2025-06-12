@@ -96,27 +96,12 @@
         swapoff -a
         sed -i '/swap/ s/^/#/' /etc/fstab
 
-    - name: Configure IPv4 packet forwarding and bridge settings
+    - name: Configure IPv4 packet forwarding
       block:
-        - name: Load required kernel modules
-          shell: |
-            modprobe overlay
-            modprobe br_netfilter
-          ignore_errors: yes
-
-        - name: Create modules-load config
-          copy:
-            content: |
-              overlay
-              br_netfilter
-            dest: /etc/modules-load.d/k8s.conf
-
         - name: Create sysctl config for Kubernetes
           copy:
             content: |
-              net.bridge.bridge-nf-call-iptables  = 1
-              net.bridge.bridge-nf-call-ip6tables = 1
-              net.ipv4.ip_forward                 = 1
+              net.ipv4.ip_forward = 1
             dest: /etc/sysctl.d/k8s.conf
 
         - name: Apply sysctl settings
@@ -124,42 +109,17 @@
 
     - name: Install Kubernetes packages
       block:
-        - name: Check if Kubernetes keyring exists
-          stat:
-            path: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-          register: k8s_keyring
-
-        - name: Remove old Kubernetes keyring if exists
-          file:
-            path: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-            state: absent
-          when: k8s_keyring.stat.exists
-
-        - name: Add Kubernetes GPG key (alternative method)
+        - name: Add Kubernetes GPG key
           shell: |
-            curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.28/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-          environment:
-            http_proxy: ""
-            https_proxy: ""
-          timeout: 120
-          retries: 3
-          delay: 10
-
-        - name: Verify Kubernetes keyring was created
-          stat:
-            path: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-          register: k8s_keyring_check
-          failed_when: not k8s_keyring_check.stat.exists
+            curl -fsSL https://pkgs.k8s.io/core:/stable:/v{{ k8s_version }}/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
 
         - name: Add Kubernetes repository
           shell: |
-            echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.28/deb/ /' | tee /etc/apt/sources.list.d/kubernetes.list
+            echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v{{ k8s_version }}/deb/ /' | tee /etc/apt/sources.list.d/kubernetes.list
 
-        - name: Update apt cache after adding Kubernetes repo
+        - name: Update apt after adding Kubernetes repo
           apt:
             update_cache: yes
-          retries: 3
-          delay: 5
 
         - name: Install Kubernetes packages
           apt:
@@ -168,9 +128,6 @@
               - kubeadm
               - kubectl
             state: present
-            update_cache: yes
-          retries: 3
-          delay: 10
 
         - name: Hold Kubernetes packages
           shell: apt-mark hold kubelet kubeadm kubectl
@@ -179,7 +136,7 @@
   hosts: masters
   become: yes
   vars:
-    pod_network_cidr: "192.168.0.0/16"
+    pod_network_cidr: "{{ pod_network_cidr | default('192.168.0.0/16') }}"
     api_server_ip: "{{ ansible_host }}"
 
   tasks:
@@ -195,18 +152,9 @@
         state: started
         enabled: yes
 
-    - name: Check if cluster is already initialized
-      stat:
-        path: /etc/kubernetes/admin.conf
-      register: kubernetes_init_stat
-
-    - name: Reset kubeadm if needed
-      shell: kubeadm reset -f --cri-socket=unix:///var/run/cri-dockerd.sock
-      when: kubernetes_init_stat.stat.exists
-
     - name: Initialize Kubernetes cluster
       shell: |
-        kubeadm init --pod-network-cidr={{ pod_network_cidr }} --cri-socket=unix:///var/run/cri-dockerd.sock --apiserver-advertise-address={{ api_server_ip }} --ignore-preflight-errors=FileContent--proc-sys-net-bridge-bridge-nf-call-iptables
+        kubeadm init --pod-network-cidr={{ pod_network_cidr }} --cri-socket=unix:///var/run/cri-dockerd.sock --apiserver-advertise-address={{ api_server_ip }}
       register: kubeadm_init
       ignore_errors: yes
 
@@ -244,24 +192,16 @@
         mode: "0644"
       when: ansible_user != "root"
 
-    - name: Wait for Kubernetes API server to be ready
-      wait_for:
-        port: 6443
-        host: "{{ ansible_host }}"
-        delay: 10
-        timeout: 300
-
     - name: Deploy Calico network
       shell: |
-        export KUBECONFIG=/root/.kube/config
         kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.29.2/manifests/tigera-operator.yaml
         kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.29.2/manifests/custom-resources.yaml
+      environment:
+        KUBECONFIG: ~/.kube/config
       ignore_errors: yes
 
     - name: Generate cluster join command
-      shell: |
-        export KUBECONFIG=/root/.kube/config
-        kubeadm token create --print-join-command
+      shell: kubeadm token create --print-join-command
       register: join_command
 
     - name: Save join command to file
@@ -355,11 +295,12 @@
 
     - name: Create necessary namespaces
       shell: |
-        export KUBECONFIG=/root/.kube/config
         kubectl create namespace argocd
         kubectl create namespace metallb-system
         kubectl create namespace traefik
         kubectl create namespace monitoring
+      environment:
+        KUBECONFIG: ~/.kube/config
       ignore_errors: yes
 
 - name: Join Worker Nodes
@@ -379,15 +320,6 @@
         state: started
         enabled: yes
 
-    - name: Check if worker already joined
-      stat:
-        path: /etc/kubernetes/kubelet.conf
-      register: worker_joined
-
-    - name: Reset worker node if already joined
-      shell: kubeadm reset -f --cri-socket=unix:///var/run/cri-dockerd.sock
-      when: worker_joined.stat.exists
-
     - name: Copy join command to worker
       copy:
         src: /tmp/joincluster.sh
@@ -396,10 +328,4 @@
 
     - name: Join worker to cluster
       shell: bash /tmp/joincluster.sh
-      register: join_result
       ignore_errors: yes
-
-    - name: Display join result
-      debug:
-        var: join_result.stdout_lines
-      when: join_result.stdout_lines is defined

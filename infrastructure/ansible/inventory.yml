@@ -14,8 +14,8 @@ workers
 ansible_python_interpreter=/usr/bin/python3
 ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
 ansible_host_key_checking=false
-kubernetes_version="{{ lookup('env', 'KUBERNETES_VERSION') | default('1.28.2') }}"
-container_runtime=containerd
+kubernetes_version="{{ lookup('env', 'KUBERNETES_VERSION') | default('1.32') }}"
+container_runtime=docker
 pod_network_cidr="{{ lookup('env', 'POD_NETWORK_CIDR') | default('10.244.0.0/16') }}"
 service_cidr="{{ lookup('env', 'SERVICE_CIDR') | default('10.96.0.0/12') }}"
 

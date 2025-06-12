@@ -1,0 +1,22 @@
+apiVersion: v2
+name: todo-app
+description: A Helm chart for Todo Application (Frontend + Backend)
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - todo
+  - react
+  - express
+  - nodejs
+  - postgresql
+home: https://github.com/soymustamahti/todolist-kub
+sources:
+  - https://github.com/soymustamahti/todolist-kub
+maintainers:
+  - name: Your Name
+    email: your.email@example.com
+dependencies:
+  - name: postgresql
+    version: 12.12.10
+    repository: https://charts.bitnami.com/bitnami
+    condition: postgresql.enabled

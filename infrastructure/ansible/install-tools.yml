@@ -44,53 +44,45 @@
         kubeconfig: /root/.kube/config
 
     - name: Add ArgoCD Helm repository
-      kubernetes.core.helm_repository:
-        name: argo
-        repo_url: https://argoproj.github.io/argo-helm
+      shell: |
+        export KUBECONFIG=/root/.kube/config
+        helm repo add argo https://argoproj.github.io/argo-helm
+        helm repo update
+      environment:
+        KUBECONFIG: /root/.kube/config
 
     - name: Install ArgoCD with Helm
-      kubernetes.core.helm:
-        name: argocd
-        chart_ref: argo/argo-cd
-        release_namespace: "{{ argocd_namespace }}"
-        create_namespace: true
-        kubeconfig: /root/.kube/config
-        values:
-          server:
-            service:
-              type: NodePort
-              nodePortHttp: 30080
-              nodePortHttps: 30443
-          configs:
-            params:
-              server.insecure: true
+      shell: |
+        export KUBECONFIG=/root/.kube/config
+        helm upgrade --install argocd argo/argo-cd \
+          --namespace {{ argocd_namespace }} \
+          --create-namespace \
+          --set server.service.type=NodePort \
+          --set server.service.nodePortHttp=30080 \
+          --set server.service.nodePortHttps=30443 \
+          --set configs.params."server\.insecure"=true \
+          --timeout=10m
+      environment:
+        KUBECONFIG: /root/.kube/config
+      register: argocd_install
+      failed_when: argocd_install.rc != 0
 
     - name: Wait for ArgoCD to be ready
-      kubernetes.core.k8s_info:
-        api_version: apps/v1
-        kind: Deployment
-        name: argocd-server
-        namespace: "{{ argocd_namespace }}"
-        kubeconfig: /root/.kube/config
-        wait: true
-        wait_condition:
-          type: Available
-          status: "True"
-        wait_timeout: 600
+      shell: |
+        export KUBECONFIG=/root/.kube/config
+        kubectl wait --for=condition=available --timeout=600s deployment/argocd-server -n {{ argocd_namespace }}
+      environment:
+        KUBECONFIG: /root/.kube/config
+      ignore_errors: yes
 
     - name: Get ArgoCD initial admin password
-      kubernetes.core.k8s_info:
-        api_version: v1
-        kind: Secret
-        name: argocd-initial-admin-secret
-        namespace: "{{ argocd_namespace }}"
-        kubeconfig: /root/.kube/config
-      register: argocd_secret
-
-    - name: Decode ArgoCD password
-      set_fact:
-        argocd_password: "{{ argocd_secret.resources[0].data.password | b64decode }}"
-      when: argocd_secret.resources
+      shell: |
+        export KUBECONFIG=/root/.kube/config
+        kubectl get secret argocd-initial-admin-secret -n {{ argocd_namespace }} -o jsonpath="{.data.password}" | base64 -d
+      environment:
+        KUBECONFIG: /root/.kube/config
+      register: argocd_password_result
+      ignore_errors: yes
 
     - name: Display ArgoCD access information
       debug:
@@ -102,7 +94,7 @@
 
           Login credentials:
           - Username: admin
-          - Password: {{ argocd_password | default('Check the argocd-initial-admin-secret') }}
+          - Password: {{ argocd_password_result.stdout | default('Check the argocd-initial-admin-secret') }}
 
 - name: Install Prometheus Stack using Helm
   hosts: masters
@@ -112,31 +104,31 @@
 
   tasks:
     - name: Add Prometheus Community Helm repository
-      kubernetes.core.helm_repository:
-        name: prometheus-community
-        repo_url: https://prometheus-community.github.io/helm-charts
+      shell: |
+        export KUBECONFIG=/root/.kube/config
+        helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+        helm repo update
+      environment:
+        KUBECONFIG: /root/.kube/config
 
     - name: Install Prometheus Stack with Helm
-      kubernetes.core.helm:
-        name: prometheus-stack
-        chart_ref: prometheus-community/kube-prometheus-stack
-        release_namespace: "{{ monitoring_namespace }}"
-        create_namespace: true
-        kubeconfig: /root/.kube/config
-        values:
-          prometheus:
-            service:
-              type: NodePort
-              nodePort: 30090
-          grafana:
-            service:
-              type: NodePort
-              nodePort: 30091
-            adminPassword: admin123
-          alertmanager:
-            service:
-              type: NodePort
-              nodePort: 30092
+      shell: |
+        export KUBECONFIG=/root/.kube/config
+        helm upgrade --install prometheus-stack prometheus-community/kube-prometheus-stack \
+          --namespace {{ monitoring_namespace }} \
+          --create-namespace \
+          --set prometheus.service.type=NodePort \
+          --set prometheus.service.nodePort=30090 \
+          --set grafana.service.type=NodePort \
+          --set grafana.service.nodePort=30091 \
+          --set grafana.adminPassword=admin123 \
+          --set alertmanager.service.type=NodePort \
+          --set alertmanager.service.nodePort=30092 \
+          --timeout=10m
+      environment:
+        KUBECONFIG: /root/.kube/config
+      register: prometheus_install
+      failed_when: prometheus_install.rc != 0
 
     - name: Display Prometheus Stack access information
       debug:
@@ -154,28 +146,28 @@
 
   tasks:
     - name: Add Traefik Helm repository
-      kubernetes.core.helm_repository:
-        name: traefik
-        repo_url: https://helm.traefik.io/traefik
+      shell: |
+        export KUBECONFIG=/root/.kube/config
+        helm repo add traefik https://helm.traefik.io/traefik
+        helm repo update
+      environment:
+        KUBECONFIG: /root/.kube/config
 
     - name: Install Traefik with Helm
-      kubernetes.core.helm:
-        name: traefik
-        chart_ref: traefik/traefik
-        release_namespace: "{{ traefik_namespace }}"
-        create_namespace: true
-        kubeconfig: /root/.kube/config
-        values:
-          service:
-            type: NodePort
-          ports:
-            web:
-              nodePort: 30082
-            websecure:
-              nodePort: 30444
-          ingressRoute:
-            dashboard:
-              enabled: true
+      shell: |
+        export KUBECONFIG=/root/.kube/config
+        helm upgrade --install traefik traefik/traefik \
+          --namespace {{ traefik_namespace }} \
+          --create-namespace \
+          --set service.type=NodePort \
+          --set ports.web.nodePort=30082 \
+          --set ports.websecure.nodePort=30444 \
+          --set ingressRoute.dashboard.enabled=true \
+          --timeout=10m
+      environment:
+        KUBECONFIG: /root/.kube/config
+      register: traefik_install
+      failed_when: traefik_install.rc != 0
 
     - name: Display Traefik access information
       debug:

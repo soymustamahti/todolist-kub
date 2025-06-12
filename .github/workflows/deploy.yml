@@ -1,93 +1,169 @@
-name: Deploy Todo App to Kubernetes
+name: Build and Deploy to Kubernetes
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
     branches: [main]
 
 env:
-  REGISTRY_URL: soymustael
-  FRONTEND_IMAGE: todo-frontend
-  BACKEND_IMAGE: todo-backend
+  REGISTRY: docker.io
+  DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+  DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+  KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
 
 jobs:
-  build-and-deploy:
+  build-and-push:
     runs-on: ubuntu-latest
-    
+
+    outputs:
+      frontend-image: ${{ steps.meta.outputs.frontend-image }}
+      backend-image: ${{ steps.meta.outputs.backend-image }}
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: "yarn"
+          cache-dependency-path: "app/yarn.lock"
 
-    - name: Login to Docker Hub
-      uses: docker/login-action@v3
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Install dependencies
+        working-directory: ./app
+        run: yarn install --frozen-lockfile
 
-    - name: Build and push frontend image
-      uses: docker/build-push-action@v5
-      with:
-        context: ./app
-        file: ./app/apps/frontend/Dockerfile
-        push: true
-        tags: |
-          ${{ env.REGISTRY_URL }}/${{ env.FRONTEND_IMAGE }}:latest
-          ${{ env.REGISTRY_URL }}/${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
+      - name: Build backend
+        working-directory: ./app/apps/backend
+        run: |
+          yarn build
+          yarn db:generate
 
-    - name: Build and push backend image
-      uses: docker/build-push-action@v5
-      with:
-        context: ./app
-        file: ./app/apps/backend/Dockerfile
-        push: true
-        tags: |
-          ${{ env.REGISTRY_URL }}/${{ env.BACKEND_IMAGE }}:latest
-          ${{ env.REGISTRY_URL }}/${{ env.BACKEND_IMAGE }}:${{ github.sha }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
+      - name: Build frontend
+        working-directory: ./app/apps/frontend
+        run: yarn build
 
-    - name: Set up kubectl
-      uses: azure/setup-kubectl@v3
-      with:
-        version: 'latest'
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-    - name: Configure kubectl
-      run: |
-        mkdir -p ~/.kube
-        echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > ~/.kube/config
-        chmod 600 ~/.kube/config
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ env.DOCKER_USERNAME }}
+          password: ${{ env.DOCKER_PASSWORD }}
 
-    - name: Deploy to Kubernetes
-      run: |
-        # Update image tags in deployment files
-        sed -i "s|soymustael/todo-frontend:latest|soymustael/todo-frontend:${{ github.sha }}|g" k8s/frontend-deployment.yaml
-        sed -i "s|soymustael/todo-backend:latest|soymustael/todo-backend:${{ github.sha }}|g" k8s/backend-deployment.yaml
-        
-        # Apply Kubernetes manifests
-        kubectl apply -f k8s/namespace.yaml
-        kubectl apply -f k8s/secrets.yaml
-        kubectl apply -f k8s/postgres-pv.yaml
-        kubectl apply -f k8s/postgres-deployment.yaml
-        kubectl apply -f k8s/backend-deployment.yaml
-        kubectl apply -f k8s/frontend-deployment.yaml
-        kubectl apply -f k8s/ingress.yaml
-        
-        # Wait for deployments to be ready
-        kubectl rollout status deployment/backend-deployment -n todo-app --timeout=300s
-        kubectl rollout status deployment/frontend-deployment -n todo-app --timeout=300s
-        
-        # Run database migrations
-        kubectl wait --for=condition=ready pod -l app=backend -n todo-app --timeout=300s
-        kubectl exec -n todo-app deployment/backend-deployment -- yarn migrate:deploy
+      - name: Extract metadata
+        id: meta
+        run: |
+          # Generate tags based on branch and commit
+          if [[ $GITHUB_REF == refs/heads/main ]]; then
+            TAG="latest"
+          else
+            TAG="${GITHUB_REF#refs/heads/}-${GITHUB_SHA::8}"
+          fi
 
-    - name: Verify deployment
-      run: |
-        kubectl get pods -n todo-app
-        kubectl get services -n todo-app
-        kubectl get ingress -n todo-app
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "frontend-image=${{ env.DOCKER_USERNAME }}/todo-frontend:$TAG" >> $GITHUB_OUTPUT
+          echo "backend-image=${{ env.DOCKER_USERNAME }}/todo-backend:$TAG" >> $GITHUB_OUTPUT
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./app/apps/backend
+          file: ./app/apps/backend/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.backend-image }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./app/apps/frontend
+          file: ./app/apps/frontend/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.frontend-image }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: "1.28.0"
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: "3.12.0"
+
+      - name: Configure kubectl
+        run: |
+          echo "${{ env.KUBE_CONFIG }}" | base64 -d > kubeconfig
+          export KUBECONFIG=kubeconfig
+
+      - name: Update Helm values with new image tags
+        run: |
+          # Update values.yaml with new image tags
+          sed -i "s|repository: YOUR_DOCKER_USERNAME/todo-frontend|repository: ${{ env.DOCKER_USERNAME }}/todo-frontend|g" k8s/helm-charts/todo-app/values.yaml
+          sed -i "s|repository: YOUR_DOCKER_USERNAME/todo-backend|repository: ${{ env.DOCKER_USERNAME }}/todo-backend|g" k8s/helm-charts/todo-app/values.yaml
+          sed -i "s|tag: \"latest\"|tag: \"${{ needs.build-and-push.outputs.tag }}\"|g" k8s/helm-charts/todo-app/values.yaml
+
+      - name: Deploy with Helm
+        run: |
+          export KUBECONFIG=kubeconfig
+
+          # Add required Helm repositories
+          helm repo add bitnami https://charts.bitnami.com/bitnami
+          helm repo update
+
+          # Deploy or upgrade the application
+          helm upgrade --install todo-app ./k8s/helm-charts/todo-app \
+            --namespace todo-app \
+            --create-namespace \
+            --set frontend.image.repository=${{ env.DOCKER_USERNAME }}/todo-frontend \
+            --set frontend.image.tag=latest \
+            --set backend.image.repository=${{ env.DOCKER_USERNAME }}/todo-backend \
+            --set backend.image.tag=latest \
+            --wait \
+            --timeout=10m
+
+      - name: Verify deployment
+        run: |
+          export KUBECONFIG=kubeconfig
+          kubectl get pods -n todo-app
+          kubectl get services -n todo-app
+          kubectl get ingress -n todo-app
+
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: "fs"
+          scan-ref: "."
+          format: "sarif"
+          output: "trivy-results.sarif"
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: "trivy-results.sarif"
