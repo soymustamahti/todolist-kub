@@ -1,0 +1,27 @@
+---
+- name: Join worker nodes to Kubernetes cluster
+  hosts: workers
+  become: yes
+  gather_facts: yes
+  
+  tasks:
+    - name: Check if node is already part of cluster
+      shell: kubectl get nodes
+      register: kubectl_result
+      ignore_errors: yes
+      
+    - name: Copy join command from local machine
+      copy:
+        src: /tmp/join-command
+        dest: /tmp/join-command
+        mode: '0755'
+      when: kubectl_result.rc != 0
+      
+    - name: Join worker node to cluster
+      shell: "$(cat /tmp/join-command)"
+      when: kubectl_result.rc != 0
+      
+    - name: Remove join command file
+      file:
+        path: /tmp/join-command
+        state: absent

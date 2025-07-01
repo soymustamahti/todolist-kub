@@ -1,0 +1,23 @@
+---
+- name: Install Helm on master node
+  hosts: master
+  become: yes
+  gather_facts: yes
+  
+  tasks:
+    - name: Download Helm installer
+      get_url:
+        url: https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+        dest: /tmp/get_helm.sh
+        mode: '0700'
+        
+    - name: Install Helm
+      shell: /tmp/get_helm.sh
+      
+    - name: Verify Helm installation
+      shell: helm version --short
+      register: helm_version
+      
+    - name: Print Helm version
+      debug:
+        msg: "{{ helm_version.stdout }}"

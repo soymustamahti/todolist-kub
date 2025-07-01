@@ -137,3 +137,40 @@ jobs:
           echo "# Pull backend image" >> $GITHUB_STEP_SUMMARY
           echo "docker pull ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.BACKEND_IMAGE_NAME }}:${{ steps.tag.outputs.tag_name }}" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+  update-manifests:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    
+    steps:
+      - name: Checkout config repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/todolist-kub-argocd-config
+          token: ${{ secrets.GH_TOKEN }}
+          path: config-repo
+
+      - name: Extract tag name
+        id: tag
+        run: |
+          echo "tag_name=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Update image tags in manifests
+        run: |
+          cd config-repo
+          
+          # Update backend image tag
+          sed -i "s|image: soymustael/todolist-kub-backend:.*|image: soymustael/todolist-kub-backend:${{ steps.tag.outputs.tag_name }}|g" manifests/backend.yaml
+          
+          # Update frontend image tag  
+          sed -i "s|image: soymustael/todolist-kub-frontend:.*|image: soymustael/todolist-kub-frontend:${{ steps.tag.outputs.tag_name }}|g" manifests/frontend.yaml
+
+      - name: Commit and push changes
+        run: |
+          cd config-repo
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add manifests/
+          git commit -m "Update image tags to ${{ steps.tag.outputs.tag_name }}" || exit 0
+          git push
