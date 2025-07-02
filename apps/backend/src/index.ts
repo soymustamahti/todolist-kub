@@ -18,11 +18,14 @@ export const prisma = new PrismaClient();
 // Super simple CORS - allow everything
 app.use(cors());
 
-// Simple middleware to allow all origins
+// Simple middleware to allow all origins and fix referrer policy
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Methods", "*");
   res.header("Access-Control-Allow-Headers", "*");
+  res.header("Referrer-Policy", "no-referrer-when-downgrade");
+  res.header("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
+  res.header("Cross-Origin-Embedder-Policy", "unsafe-none");
   next();
 });
 
