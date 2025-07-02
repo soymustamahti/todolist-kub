@@ -161,11 +161,15 @@ jobs:
         run: |
           cd config-repo
 
-          # Update backend image tag
+          # Update backend image tag in individual manifests
           sed -i "s|image: soymustael/todolist-kub-backend:.*|image: soymustael/todolist-kub-backend:${{ steps.tag.outputs.tag_name }}|g" manifests/backend.yaml
 
-          # Update frontend image tag  
+          # Update frontend image tag in individual manifests
           sed -i "s|image: soymustael/todolist-kub-frontend:.*|image: soymustael/todolist-kub-frontend:${{ steps.tag.outputs.tag_name }}|g" manifests/frontend.yaml
+
+          # Update image tags in kustomization.yaml
+          sed -i "/name: soymustael\/todolist-kub-backend/,/newTag:/ s/newTag:.*/newTag: ${{ steps.tag.outputs.tag_name }}/" manifests/kustomization.yaml
+          sed -i "/name: soymustael\/todolist-kub-frontend/,/newTag:/ s/newTag:.*/newTag: ${{ steps.tag.outputs.tag_name }}/" manifests/kustomization.yaml
 
       - name: Commit and push changes
         run: |

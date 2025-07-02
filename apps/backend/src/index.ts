@@ -15,9 +15,51 @@ const port = process.env.PORT || 3001;
 // Initialize Prisma Client
 export const prisma = new PrismaClient();
 
-app.use(cors({ origin: true }));
+// CORS configuration with debugging
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) return callback(null, true);
+
+      console.log("CORS Origin:", origin);
+      // Allow all origins for now
+      callback(null, true);
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-Requested-With",
+      "Accept",
+    ],
+    exposedHeaders: ["Content-Length", "X-Request-ID"],
+    maxAge: 86400, // 24 hours
+  })
+);
+
+// Add explicit OPTIONS handler for all routes
+app.options("*", (req, res) => {
+  console.log("OPTIONS request received:", req.method, req.url);
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.header(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization, X-Requested-With, Accept"
+  );
+  res.sendStatus(200);
+});
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Request logging middleware
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+  console.log("Headers:", JSON.stringify(req.headers, null, 2));
+  next();
+});
 
 // Routes
 app.use("/api/auth", authRoutes);
