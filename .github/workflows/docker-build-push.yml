@@ -96,6 +96,7 @@ jobs:
             VERSION=${{ steps.tag.outputs.tag_name }}
             COMMIT_SHA=${{ github.sha }}
             BUILD_DATE={{date 'YYYY-MM-DDTHH:mm:ssZ'}}
+            VITE_API_URL=http://141.98.153.135:30091/api
 
       - name: Build and push backend image
         uses: docker/build-push-action@v5
@@ -142,7 +143,7 @@ jobs:
     needs: build-and-push
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref_type == 'tag'
-    
+
     steps:
       - name: Checkout config repository
         uses: actions/checkout@v4
@@ -159,10 +160,10 @@ jobs:
       - name: Update image tags in manifests
         run: |
           cd config-repo
-          
+
           # Update backend image tag
           sed -i "s|image: soymustael/todolist-kub-backend:.*|image: soymustael/todolist-kub-backend:${{ steps.tag.outputs.tag_name }}|g" manifests/backend.yaml
-          
+
           # Update frontend image tag  
           sed -i "s|image: soymustael/todolist-kub-frontend:.*|image: soymustael/todolist-kub-frontend:${{ steps.tag.outputs.tag_name }}|g" manifests/frontend.yaml
 
