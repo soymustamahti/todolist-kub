@@ -53,10 +53,6 @@ COPY --from=builder --chown=backend:nodejs /app/apps/backend/dist ./dist
 COPY --from=builder --chown=backend:nodejs /app/apps/backend/prisma ./prisma
 COPY --from=builder --chown=backend:nodejs /app/node_modules/.prisma ./node_modules/.prisma
 
-# Copy startup script
-COPY --chown=backend:nodejs apps/backend/start.sh ./start.sh
-RUN chmod +x ./start.sh
-
 # Switch to non-root user
 USER backend
 
@@ -66,4 +62,4 @@ EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD node -e "require('http').get('http://localhost:3001/api/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
 
-CMD ["./start.sh"]
+CMD ["node", "dist/index.js"]
